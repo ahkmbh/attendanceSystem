@@ -876,7 +876,7 @@ def page_reports():
         return ""
 
     st.dataframe(
-        df_report.style.applymap(color_absent, subset=["غائب"]),
+        df_report.style.map(color_absent, subset=["غائب"]),
         use_container_width=True
     )
 
