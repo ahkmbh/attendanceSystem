@@ -43,6 +43,21 @@ st.set_page_config(
 
 # ── CSS مخصص للدعم العربي والألوان وتحسينات الهاتف ──────────────────
 st.markdown("""
+    <style>
+    /* إخفاء التلميح الصغير الذي يظهر أسفل الحقل */
+    div[data-testid="stTextInput"] div[data-testid="InputInstructions"] {
+        display: none;
+    }
+    
+    /* تغيير لون إطار الحقل عند التركيز */
+    div[data-testid="stTextInput"] input:focus {
+        border-color: #27ae60;
+        box-shadow: 0 0 0 0.2rem rgba(39, 174, 96, 0.25);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.markdown("""
 <style>
     body, .stApp { direction: rtl; }
     .stButton > button { border-radius: 10px; font-weight: bold; }
