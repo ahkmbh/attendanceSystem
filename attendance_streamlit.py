@@ -44,6 +44,27 @@ st.set_page_config(
 # ── CSS مخصص للدعم العربي والألوان وتحسينات الهاتف ──────────────────
 st.markdown("""
     <style>
+    /* جعل الحاويات مرنة عند التصغير */
+    [data-testid="column"] {
+        width: 100% !important;
+        flex: 1 1 calc(50% - 1rem) !important;
+        min-width: 300px !important;
+    }
+    
+    /* منع النصوص من التداخل أو الخروج عن الإطار */
+    .stMarkdown, div[data-testid="stVerticalBlock"] {
+        overflow-wrap: break-word;
+    }
+
+    /* تحسين شكل الأزرار في المساحات الضيقة */
+    .stButton button {
+        width: 100%;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.markdown("""
+    <style>
     /* إخفاء التلميح الصغير الذي يظهر أسفل الحقل */
     div[data-testid="stTextInput"] div[data-testid="InputInstructions"] {
         display: none;
@@ -459,8 +480,8 @@ def page_login():
         st.markdown("""
         <div style='text-align:center; padding: 40px 0 20px'>
             <div style='font-size:5rem'>🎓</div>
-            <h1 style='color:#1a237e; margin:0'>نظام الحضور المدرسي</h1>
-            <p style='color:#7986cb'>إدارة الحضور والغياب بشكل احترافي</p>
+            <h1 style='color:#1a237e; margin:0'>نظام تسجيل الحضور </h1>
+            <p style='color:#7986cb'>إدارة الحضور والغياب للتعليم الديني</p>
         </div>
         """, unsafe_allow_html=True)
 
