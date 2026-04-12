@@ -1,0 +1,18 @@
+# قاعدة البيانات — لا ترفعها (تحتوي بيانات حقيقية)
+school_attendance.db
+*.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+venv/
+env/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# نظام التشغيل
+.DS_Store
+Thumbs.db
