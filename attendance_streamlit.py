@@ -481,7 +481,7 @@ def page_login():
         <div style='text-align:center; padding: 40px 0 20px'>
             <div style='font-size:5rem'>🎓</div>
             <h1 style='color:#1a237e; margin:0'>نظام تسجيل الحضور </h1>
-            <p style='color:#7986cb'>إدارة الحضور والغياب للتعليم الديني</p>
+            <p style='color:#7986cb'>إدارة الحضور والغياب لمشاريع التعليم الديني</p>
         </div>
         """, unsafe_allow_html=True)
 
