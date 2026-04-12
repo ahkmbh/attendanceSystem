@@ -1,5 +1,5 @@
 """
-نظام تسجيل الحضور المدرسي - Streamlit + SQLite
+نظام تسجيل الحضور المدرسي المطور - Streamlit + SQLite
 ============================================================
 المتطلبات:
     pip install streamlit pandas openpyxl reportlab arabic-reshaper python-bidi bcrypt
@@ -35,13 +35,13 @@ from bidi.algorithm import get_display
 # إعدادات الصفحة
 # ════════════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="نظام الحضور المدرسي",
+    page_title="نظام الحضور ",
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ── CSS مخصص للدعم العربي والألوان ──────────────────────────────────
+# ── CSS مخصص للدعم العربي والألوان وتحسينات الهاتف ──────────────────
 st.markdown("""
 <style>
     body, .stApp { direction: rtl; }
@@ -57,13 +57,18 @@ st.markdown("""
         padding: 10px 16px; margin: 6px 0;
         border-right: 4px solid #f57f17;
     }
-    .student-present { background: #f1f8e9 !important; }
-    .student-absent  { background: #fce4ec !important; }
-    .student-late    { background: #fff8e1 !important; }
     div[data-testid="stSidebar"] { background: #1a237e; }
     div[data-testid="stSidebar"] * { color: white !important; }
     .sidebar-title { font-size: 1.2rem; font-weight: bold; text-align: center;
                      padding: 10px; background: #283593; border-radius: 10px; }
+                     
+    /* تحسينات الموبايل (Media Queries) */
+    @media (max-width: 768px) {
+        .stButton > button { padding: 0.75rem 1rem !important; } /* تكبير الأزرار لتناسب اللمس */
+        .metric-val { font-size: 1.5rem !important; } /* تصغير أرقام الإحصائيات */
+        .metric-card { padding: 12px 10px !important; }
+        div[data-testid="stSidebar"] { min-width: 250px !important; }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -86,7 +91,6 @@ def get_conn():
         raise
     finally:
         conn.close()
-
 
 def init_db():
     with get_conn() as conn:
@@ -118,6 +122,10 @@ def init_db():
             status     TEXT NOT NULL CHECK(status IN ('h','g','m')),
             UNIQUE(student_id, date)
         );
+        
+        -- إضافة الفهارس (Indexes) لتسريع الأداء
+        CREATE INDEX IF NOT EXISTS idx_attendance_date_class ON attendance(date, class_id);
+        CREATE INDEX IF NOT EXISTS idx_students_class ON students(class_id);
         """)
 
         # إنشاء المشرف الافتراضي إذا لم يوجد
@@ -135,12 +143,10 @@ def init_db():
                 ("teacher", t_hash, "المعلم", "teacher")
             )
 
-
 # ════════════════════════════════════════════════════════════════════
 # دوال قاعدة البيانات
 # ════════════════════════════════════════════════════════════════════
 
-# ── المستخدمون ──────────────────────────────────────────────────────
 def verify_user(username: str, password: str):
     with get_conn() as conn:
         row = conn.execute(
@@ -150,11 +156,9 @@ def verify_user(username: str, password: str):
         return dict(row)
     return None
 
-
 def get_all_users():
     with get_conn() as conn:
         return [dict(r) for r in conn.execute("SELECT id,username,name,role FROM users").fetchall()]
-
 
 def add_user(username, password, name, role):
     hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
@@ -164,41 +168,32 @@ def add_user(username, password, name, role):
             (username, hashed, name, role)
         )
 
-
 def delete_user(user_id):
     with get_conn() as conn:
         conn.execute("DELETE FROM users WHERE id=?", (user_id,))
-
 
 def change_password(username, new_password):
     hashed = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
     with get_conn() as conn:
         conn.execute("UPDATE users SET password=? WHERE username=?", (hashed, username))
 
-
-# ── الصفوف ──────────────────────────────────────────────────────────
 def get_classes():
     with get_conn() as conn:
         return [dict(r) for r in conn.execute("SELECT * FROM classes ORDER BY name").fetchall()]
-
 
 def add_class(name: str):
     with get_conn() as conn:
         conn.execute("INSERT INTO classes(name) VALUES(?)", (name,))
 
-
 def delete_class(class_id: int):
     with get_conn() as conn:
         conn.execute("DELETE FROM classes WHERE id=?", (class_id,))
 
-
-# ── الطلاب ──────────────────────────────────────────────────────────
 def get_students(class_id: int):
     with get_conn() as conn:
         return [dict(r) for r in conn.execute(
             "SELECT * FROM students WHERE class_id=? ORDER BY name", (class_id,)
         ).fetchall()]
-
 
 def get_all_students():
     with get_conn() as conn:
@@ -208,24 +203,19 @@ def get_all_students():
                ORDER BY c.name, s.name"""
         ).fetchall()]
 
-
 def add_student(name: str, class_id: int):
     with get_conn() as conn:
         conn.execute("INSERT INTO students(name,class_id) VALUES(?,?)", (name, class_id))
-
 
 def delete_student(student_id: int):
     with get_conn() as conn:
         conn.execute("DELETE FROM students WHERE id=?", (student_id,))
 
-
 def move_student(student_id: int, new_class_id: int):
     with get_conn() as conn:
         conn.execute("UPDATE students SET class_id=? WHERE id=?", (new_class_id, student_id))
 
-
 def import_students_from_df(df: pd.DataFrame):
-    """استيراد طلاب من DataFrame يحتوي أعمدة 'الصف' و'الطالب'."""
     added = 0
     with get_conn() as conn:
         for _, row in df.iterrows():
@@ -246,17 +236,13 @@ def import_students_from_df(df: pd.DataFrame):
                 added += 1
     return added
 
-
-# ── الحضور ──────────────────────────────────────────────────────────
 def get_attendance(class_id: int, date: str):
-    """إرجاع dict: {student_id: status}"""
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT student_id, status FROM attendance WHERE class_id=? AND date=?",
             (class_id, date)
         ).fetchall()
     return {r["student_id"]: r["status"] for r in rows}
-
 
 def set_attendance(student_id: int, class_id: int, date: str, status: str):
     with get_conn() as conn:
@@ -266,7 +252,6 @@ def set_attendance(student_id: int, class_id: int, date: str, status: str):
                ON CONFLICT(student_id,date) DO UPDATE SET status=excluded.status""",
             (student_id, class_id, date, status)
         )
-
 
 def get_today_stats():
     today = datetime.now().strftime("%Y-%m-%d")
@@ -280,9 +265,7 @@ def get_today_stats():
         """, (today,)).fetchone()
     return (row["h"] or 0, row["g"] or 0, row["m"] or 0)
 
-
 def get_absent_streak():
-    """طلاب غائبون 3 أيام متتالية أو أكثر."""
     results = []
     with get_conn() as conn:
         students = conn.execute(
@@ -305,7 +288,6 @@ def get_absent_streak():
             if streak >= 3:
                 results.append({"name": std["name"], "class": std["cls"], "streak": streak})
     return results
-
 
 def get_report_data(class_id: int, start: str, end: str, filter_name: str = ""):
     with get_conn() as conn:
@@ -332,7 +314,6 @@ def get_report_data(class_id: int, start: str, end: str, filter_name: str = ""):
             })
     return rows
 
-
 def get_class_today_pct(class_id: int, date: str, total: int):
     if total == 0:
         return 0
@@ -343,13 +324,11 @@ def get_class_today_pct(class_id: int, date: str, total: int):
         ).fetchone()["c"]
     return int((h / total) * 100)
 
-
 # ════════════════════════════════════════════════════════════════════
 # مساعد PDF
 # ════════════════════════════════════════════════════════════════════
 def fix_arabic(text: str) -> str:
     return get_display(arabic_reshaper.reshape(str(text)))
-
 
 def build_pdf_bytes(class_name: str, rows_data: list, start: str, end: str) -> bytes:
     buf = io.BytesIO()
@@ -357,7 +336,6 @@ def build_pdf_bytes(class_name: str, rows_data: list, start: str, end: str) -> b
                             rightMargin=2*cm, leftMargin=2*cm,
                             topMargin=2*cm, bottomMargin=2*cm)
 
-    # محاولة تسجيل خط عربي
     font_name = "Helvetica"
     try:
         pdfmetrics.registerFont(TTFont("ArabicFont", "arial.ttf"))
@@ -384,8 +362,7 @@ def build_pdf_bytes(class_name: str, rows_data: list, start: str, end: str) -> b
     elements.append(Paragraph(ar(f"الفترة من {start} إلى {end}"), s_sub))
     elements.append(Paragraph(ar(f"تاريخ الطباعة: {datetime.now().strftime('%Y-%m-%d')}"), s_sub))
     elements.append(Spacer(1, 0.3*cm))
-    elements.append(HRFlowable(width="100%", thickness=2,
-                               color=rl_colors.HexColor("#1a237e")))
+    elements.append(HRFlowable(width="100%", thickness=2, color=rl_colors.HexColor("#1a237e")))
     elements.append(Spacer(1, 0.4*cm))
 
     total_h = sum(r["حاضر"] for r in rows_data)
@@ -448,7 +425,6 @@ def build_pdf_bytes(class_name: str, rows_data: list, start: str, end: str) -> b
     buf.seek(0)
     return buf.read()
 
-
 # ════════════════════════════════════════════════════════════════════
 # Session State
 # ════════════════════════════════════════════════════════════════════
@@ -458,7 +434,6 @@ def init_session():
         st.session_state.user        = None
         st.session_state.role        = None
         st.session_state.page        = "home"
-
 
 # ════════════════════════════════════════════════════════════════════
 # صفحة تسجيل الدخول
@@ -492,7 +467,6 @@ def page_login():
 
         st.caption("المشرف: admin / admin123   •   المعلم: teacher / teacher123")
 
-
 # ════════════════════════════════════════════════════════════════════
 # الشريط الجانبي
 # ════════════════════════════════════════════════════════════════════
@@ -524,7 +498,6 @@ def render_sidebar():
                 st.session_state.pop(k, None)
             st.rerun()
 
-
 # ════════════════════════════════════════════════════════════════════
 # الصفحة الرئيسية — لوحة الإحصائيات
 # ════════════════════════════════════════════════════════════════════
@@ -536,7 +509,6 @@ def page_home():
     classes  = get_classes()
     total_students = sum(len(get_students(c["id"])) for c in classes)
 
-    # بطاقات الإحصاء
     c1, c2, c3, c4, c5 = st.columns(5)
     cols_data = [
         (c1, len(classes), "إجمالي الصفوف",  "#3949ab", "🏫"),
@@ -557,7 +529,6 @@ def page_home():
 
     st.markdown("---")
 
-    # نسب الحضور اليوم
     col_chart, col_alerts = st.columns([1.6, 1])
 
     with col_chart:
@@ -591,7 +562,6 @@ def page_home():
                 </div>
                 """, unsafe_allow_html=True)
 
-    # جدول الصفوف
     st.markdown("---")
     st.subheader("📋 تفاصيل الصفوف")
     if classes:
@@ -603,9 +573,8 @@ def page_home():
     else:
         st.info("لا توجد صفوف مضافة بعد")
 
-
 # ════════════════════════════════════════════════════════════════════
-# تسجيل الحضور
+# تسجيل الحضور (تم التحديث لدعم الموبايل والتحضير المجمع)
 # ════════════════════════════════════════════════════════════════════
 def page_attendance():
     st.title("📝 تسجيل الحضور اليومي")
@@ -615,12 +584,14 @@ def page_attendance():
         st.warning("لا توجد صفوف. يرجى إضافة صفوف أولاً من إدارة الصفوف.")
         return
 
-    col_cls, col_date = st.columns([1, 1])
-    with col_cls:
-        cls_names = [c["name"] for c in classes]
-        selected_cls_name = st.selectbox("الصف", cls_names)
-    with col_date:
-        selected_date = st.date_input("التاريخ", value=datetime.now().date())
+    # استخدام Expander لتوفير المساحة في الهواتف
+    with st.expander("⚙️ تحديد الصف والتاريخ", expanded=True):
+        col_cls, col_date = st.columns([1, 1])
+        with col_cls:
+            cls_names = [c["name"] for c in classes]
+            selected_cls_name = st.selectbox("الصف", cls_names)
+        with col_date:
+            selected_date = st.date_input("التاريخ", value=datetime.now().date())
 
     selected_cls = next((c for c in classes if c["name"] == selected_cls_name), None)
     if not selected_cls:
@@ -634,12 +605,11 @@ def page_attendance():
         st.info("هذا الصف لا يحتوي على طلاب بعد.")
         return
 
-    # إحصائية سريعة
     h_c = sum(1 for s in students if att_data.get(s["id"]) == "h")
     g_c = sum(1 for s in students if att_data.get(s["id"]) == "g")
     m_c = sum(1 for s in students if att_data.get(s["id"]) == "m")
 
-    st.info(f"حاضر: **{h_c}**  |  غائب: **{g_c}**  |  متأخر: **{m_c}**  |  المجموع: **{len(students)}**")
+    st.info(f"حاضر: **{h_c}** |  غائب: **{g_c}** |  متأخر: **{m_c}** |  المجموع: **{len(students)}**")
 
     # أزرار جماعية
     col_all1, col_all2, col_all3, _ = st.columns([1, 1, 1, 3])
@@ -664,39 +634,41 @@ def page_attendance():
 
     st.markdown("---")
 
-    STATUS_LABELS = {"h": "✅ حاضر", "g": "❌ غائب", "m": "⏰ متأخر", "none": "—"}
-    STATUS_COLORS = {"h": "#2e7d32", "g": "#c62828", "m": "#e65100", "none": "#999"}
+    # تجهيز الجدول التفاعلي بدلاً من الأزرار الفردية
+    status_options = ["—", "✅ حاضر", "❌ غائب", "⏰ متأخر"]
+    status_map = {"none": "—", "h": "✅ حاضر", "g": "❌ غائب", "m": "⏰ متأخر"}
+    reverse_map = {"—": "none", "✅ حاضر": "h", "❌ غائب": "g", "⏰ متأخر": "m"}
 
-    # جدول الطلاب
-    for i, student in enumerate(students, 1):
+    df_data = []
+    for student in students:
         current = att_data.get(student["id"], "none")
-        row_bg  = "#f1f8e9" if current=="h" else "#fce4ec" if current=="g" else "#fff8e1" if current=="m" else "#fafafa"
+        df_data.append({
+            "student_id": student["id"],
+            "اسم الطالب": student["name"],
+            "الحالة": status_map[current]
+        })
 
-        col_num, col_name, col_h, col_g, col_m = st.columns([0.4, 2.5, 1, 1, 1])
-        with col_num:
-            st.markdown(f"<div style='padding:8px;color:#999'>{i}</div>", unsafe_allow_html=True)
-        with col_name:
-            color = STATUS_COLORS[current]
-            st.markdown(f"<div style='padding:8px;background:{row_bg};border-radius:8px'>"
-                        f"<b>{student['name']}</b>"
-                        f"<span style='float:left;color:{color};font-size:0.8rem'>{STATUS_LABELS[current]}</span></div>",
-                        unsafe_allow_html=True)
-        with col_h:
-            btn_type = "primary" if current == "h" else "secondary"
-            if st.button("✅ حاضر", key=f"h_{student['id']}_{date_str}", type=btn_type, use_container_width=True):
-                set_attendance(student["id"], selected_cls["id"], date_str, "h")
-                st.rerun()
-        with col_g:
-            btn_type = "primary" if current == "g" else "secondary"
-            if st.button("❌ غائب", key=f"g_{student['id']}_{date_str}", type=btn_type, use_container_width=True):
-                set_attendance(student["id"], selected_cls["id"], date_str, "g")
-                st.rerun()
-        with col_m:
-            btn_type = "primary" if current == "m" else "secondary"
-            if st.button("⏰ متأخر", key=f"m_{student['id']}_{date_str}", type=btn_type, use_container_width=True):
-                set_attendance(student["id"], selected_cls["id"], date_str, "m")
-                st.rerun()
+    df = pd.DataFrame(df_data)
 
+    edited_df = st.data_editor(
+        df,
+        column_config={
+            "student_id": None, # إخفاء رقم المعرف
+            "اسم الطالب": st.column_config.TextColumn("اسم الطالب", disabled=True),
+            "الحالة": st.column_config.SelectboxColumn("الحالة", options=status_options, required=True)
+        },
+        hide_index=True,
+        use_container_width=True,
+        key=f"editor_{selected_cls['id']}_{date_str}"
+    )
+
+    if st.button("💾 حفظ التحضير", type="primary", use_container_width=True):
+        for _, row in edited_df.iterrows():
+            new_status = reverse_map[row["الحالة"]]
+            if new_status != "none":
+                set_attendance(row["student_id"], selected_cls["id"], date_str, new_status)
+        st.success("✅ تم حفظ الحضور بنجاح!")
+        st.rerun()
 
 # ════════════════════════════════════════════════════════════════════
 # إدارة الصفوف
@@ -741,7 +713,6 @@ def page_classes():
                         st.rerun()
                 st.divider()
 
-
 # ════════════════════════════════════════════════════════════════════
 # إدارة الطلاب
 # ════════════════════════════════════════════════════════════════════
@@ -759,7 +730,6 @@ def page_students():
         ["📋 قائمة الطلاب", "✚ إضافة طالب", "📥 استيراد Excel", "↔ نقل طالب"]
     )
 
-    # ── قائمة الطلاب ──────────────────────────────────────────────
     with tab_list:
         col_filter, col_search = st.columns([1, 1])
         with col_filter:
@@ -788,7 +758,6 @@ def page_students():
                         delete_student(std["id"])
                         st.rerun()
 
-    # ── إضافة طالب ────────────────────────────────────────────────
     with tab_add:
         with st.form("add_student_form"):
             sel_cls = st.selectbox("الصف", list(cls_map.keys()))
@@ -798,7 +767,6 @@ def page_students():
                 if not name or sel_cls not in cls_map:
                     st.error("تأكد من اختيار الصف وكتابة الاسم")
                 else:
-                    # تحقق من عدم التكرار
                     exists = any(s["name"] == name for s in get_students(cls_map[sel_cls]))
                     if exists:
                         st.error(f"الطالب '{name}' موجود مسبقاً في هذا الصف")
@@ -807,7 +775,6 @@ def page_students():
                         st.success(f"✅ تم إضافة: {name}")
                         st.rerun()
 
-    # ── استيراد Excel ──────────────────────────────────────────────
     with tab_import:
         st.markdown("ارفع ملف Excel أو CSV يحتوي على عمودين: **الصف** و **الطالب**")
         uploaded = st.file_uploader("اختر ملف Excel / CSV", type=["xlsx", "xls", "csv"])
@@ -822,7 +789,6 @@ def page_students():
             except Exception as e:
                 st.error(f"خطأ في قراءة الملف: {e}")
 
-    # ── نقل طالب ──────────────────────────────────────────────────
     with tab_move:
         all_for_move = get_all_students()
         if not all_for_move:
@@ -841,7 +807,6 @@ def page_students():
                     st.success(f"✅ تم نقل {selected_std['name']} إلى {new_cls_name}")
                     st.rerun()
 
-
 # ════════════════════════════════════════════════════════════════════
 # الأرشيف والتقارير
 # ════════════════════════════════════════════════════════════════════
@@ -855,7 +820,6 @@ def page_reports():
 
     cls_map = {c["name"]: c["id"] for c in classes}
 
-    # إعدادات التقرير
     with st.expander("⚙️ إعدادات التقرير", expanded=True):
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -876,7 +840,6 @@ def page_reports():
         st.info("لا توجد بيانات لهذا الاختيار")
         return
 
-    # إحصائيات إجمالية
     total_h = sum(r["حاضر"] for r in rows_data)
     total_g = sum(r["غائب"] for r in rows_data)
     total_m = sum(r["متأخر"] for r in rows_data)
@@ -887,13 +850,11 @@ def page_reports():
     col_c.metric("إجمالي الغياب", total_g)
     col_d.metric("إجمالي التأخر", total_m)
 
-    # جدول الطلاب
     st.markdown("---")
     df_report = pd.DataFrame(rows_data)
     df_report.index = range(1, len(df_report) + 1)
     df_report.index.name = "م"
 
-    # تلوين الطلاب كثيري الغياب
     def color_absent(val):
         if isinstance(val, int) and val >= 5:
             return "background-color: #ffcdd2"
@@ -904,7 +865,6 @@ def page_reports():
         use_container_width=True
     )
 
-    # تقرير الغياب المتكرر
     st.markdown("---")
     st.subheader("⚠️ طلاب الغياب المتكرر")
     absent_list = get_absent_streak()
@@ -915,7 +875,6 @@ def page_reports():
     else:
         st.success("✅ لا يوجد طلاب غائبون بشكل متكرر")
 
-    # التصدير
     st.markdown("---")
     col_pdf, col_excel = st.columns(2)
 
@@ -943,7 +902,6 @@ def page_reports():
             )
         except Exception as e:
             st.error(f"خطأ في توليد PDF: {e}")
-
 
 # ════════════════════════════════════════════════════════════════════
 # إدارة المستخدمين
@@ -1002,7 +960,6 @@ def page_users():
                     change_password(sel_user, new_pass)
                     st.success("✅ تم تغيير كلمة المرور بنجاح")
 
-
 # ════════════════════════════════════════════════════════════════════
 # نقطة الدخول
 # ════════════════════════════════════════════════════════════════════
@@ -1015,7 +972,6 @@ def main():
         return
 
     render_sidebar()
-
     page = st.session_state.get("page", "home")
     if   page == "home":       page_home()
     elif page == "attendance": page_attendance()
@@ -1023,7 +979,6 @@ def main():
     elif page == "students":   page_students()
     elif page == "reports":    page_reports()
     elif page == "users":      page_users()
-
 
 if __name__ == "__main__":
     main()
