@@ -8,10 +8,13 @@
     streamlit run attendance_streamlit.py
 """
 
+from genericpath import exists
+
 import streamlit as st
 import sqlite3
 import pandas as pd
 import bcrypt
+import time
 import json
 import io
 import base64
@@ -168,12 +171,23 @@ def init_db():
             name TEXT UNIQUE NOT NULL
         );
 
-        -- تحديث جدول الطلاب لإضافة الرقم الشخصي ومنع التكرار
         CREATE TABLE IF NOT EXISTS students (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            personal_id TEXT UNIQUE NOT NULL,  -- الحقل الجديد (فريد ولا يتكرر)
-            name        TEXT NOT NULL,
-            class_id    INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            personal_id  TEXT UNIQUE NOT NULL,
+            name         TEXT NOT NULL,
+            class_id     INTEGER REFERENCES classes(id) ON DELETE SET NULL,
+            mobile       TEXT,
+            phone        TEXT,
+            house        TEXT,
+            road         TEXT,
+            block        TEXT,
+            area         TEXT,
+            school_name  TEXT,  -- تمت الإضافة هنا
+            group_name   TEXT,   -- تمت الإضافة هنا (اسم الفرقة)
+            birth_date   TEXT,
+            photo        BLOB,
+            notes        TEXT,
+            created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS attendance (
@@ -184,18 +198,18 @@ def init_db():
             status     TEXT NOT NULL CHECK(status IN ('h','g','m')),
             UNIQUE(student_id, date)
         );
-        
-        CREATE INDEX IF NOT EXISTS idx_attendance_date_class ON attendance(date, class_id);
-        CREATE INDEX IF NOT EXISTS idx_students_class ON students(class_id);
         """)
 
+        # إنشاء المستخدمين الافتراضيين إذا لم يكونوا موجودين
         exists = conn.execute("SELECT 1 FROM users WHERE username='admin'").fetchone()
         if not exists:
             hashed = bcrypt.hashpw(b"admin123", bcrypt.gensalt()).decode()
-            conn.execute("INSERT INTO users(username,password,name,role) VALUES(?,?,?,?)", ("admin", hashed, "المشرف الإداري", "admin"))
+            conn.execute("INSERT INTO users(username,password,name,role) VALUES(?,?,?,?)", 
+                         ("admin", hashed, "المشرف الإداري", "admin"))
+            
             t_hash = bcrypt.hashpw(b"teacher123", bcrypt.gensalt()).decode()
-            conn.execute("INSERT INTO users(username,password,name,role) VALUES(?,?,?,?)", ("teacher", t_hash, "المعلم", "teacher"))
-
+            conn.execute("INSERT INTO users(username,password,name,role) VALUES(?,?,?,?)", 
+                         ("teacher", t_hash, "المعلم", "teacher"))
 # ════════════════════════════════════════════════════════════════════
 # دوال قاعدة البيانات
 # ════════════════════════════════════════════════════════════════════
@@ -253,9 +267,9 @@ def delete_class(class_id: int):
 def get_all_students():
     with get_conn() as conn:
         return [dict(r) for r in conn.execute(
-            """SELECT s.id, s.personal_id, s.name, s.class_id, c.name AS class_name
-               FROM students s JOIN classes c ON s.class_id=c.id
-               ORDER BY CAST(s.personal_id AS INTEGER) ASC""" # الترتيب التصاعدي ليظهر الأكبر سناً أولاً
+            """SELECT s.*, c.name AS class_name
+               FROM students s LEFT JOIN classes c ON s.class_id = c.id
+               ORDER BY CAST(s.personal_id AS INTEGER) ASC"""
         ).fetchall()]
 
 def get_students(class_id: int):
@@ -274,10 +288,28 @@ def check_personal_id_exists(personal_id: str):
         ).fetchone()
         return dict(row) if row else None
 # تم تحديث الدالة لتستقبل الرقم الشخصي
-def add_student(personal_id: str, name: str, class_id: int):
-    with get_conn() as conn:
-        conn.execute("INSERT INTO students(personal_id, name, class_id) VALUES(?,?,?)", (personal_id, name, class_id))
+# ضع هذه الدالة الجديدة مكانها
 
+def add_student_full(pid, name, cid, mobile, phone, house, road, block, area, school, group, birth_date, photo, notes):
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO students (
+                personal_id, name, class_id, mobile, phone, 
+                house, road, block, area, school_name, 
+                group_name, birth_date, photo, notes
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (pid, name, cid, mobile, phone, house, road, block, area, school, group, birth_date, photo, notes))
+
+def update_student_full(std_id, pid, name, cid, mobile, phone, house, road, block, area, school, group, birth_date, photo, notes):
+    with get_conn() as conn:
+        conn.execute("""
+            UPDATE students SET 
+                personal_id=?, name=?, class_id=?, mobile=?, phone=?, 
+                house=?, road=?, block=?, area=?, school_name=?, 
+                group_name=?, birth_date=?, photo=?, notes=?
+            WHERE id=?
+        """, (pid, name, cid, mobile, phone, house, road, block, area, school, group, birth_date, photo, notes, std_id))
 def delete_student(student_id: int):
     with get_conn() as conn:
         conn.execute("DELETE FROM students WHERE id=?", (student_id,))
@@ -396,6 +428,60 @@ def get_class_today_pct(class_id: int, date: str, total: int):
             (class_id, date)
         ).fetchone()["c"]
     return int((h / total) * 100)
+
+
+# ============================================================
+#  دالة: بطاقة عرض الطالب
+# ============================================================
+def render_student_card(std):
+    initials = "".join([w[0] for w in std["name"].split()[:2]])
+ 
+    if std.get("photo"):
+        photo_html = (
+            f"<img src='data:image/png;base64,{base64.b64encode(std['photo']).decode()}' "
+            f"style='width:76px;height:76px;border-radius:12px;object-fit:cover;"
+            f"margin-left:16px;flex-shrink:0;border:2px solid #e8eaf6;'>"
+        )
+    else:
+        photo_html = (
+            f"<div style='width:76px;height:76px;border-radius:12px;background:#e8eaf6;"
+            f"display:flex;align-items:center;justify-content:center;"
+            f"font-size:24px;font-weight:700;color:#1a237e;"
+            f"margin-left:16px;flex-shrink:0;letter-spacing:1px;'>"
+            f"{initials}</div>"
+        )
+ 
+    class_name  = std.get("class_name") or "غير محدد"
+    mobile      = std.get("mobile") or "-"
+    school      = std.get("school_name") or ""
+    school_part = f"🏫 {school} &nbsp;|&nbsp;" if school else ""
+ 
+    st.markdown(
+        f"""
+        <div style='background:white;border-radius:15px;padding:14px 18px;
+                    border-right:5px solid #1a237e;
+                    box-shadow:0 3px 10px rgba(26,35,126,0.09);
+                    margin-bottom:10px;display:flex;align-items:center;'>
+            {photo_html}
+            <div style='flex:1;min-width:0;'>
+                <div style='font-family:monospace;font-size:12px;
+                            color:#ef6c00;font-weight:700;letter-spacing:.5px;'>
+                    {std['personal_id']}
+                </div>
+                <div style='font-size:17px;font-weight:700;color:#1a237e;
+                            margin:3px 0 4px;white-space:nowrap;
+                            overflow:hidden;text-overflow:ellipsis;'>
+                    {std['name']}
+                </div>
+                <div style='font-size:12px;color:#546e7a;'>
+                    {school_part}📂 {class_name} &nbsp;|&nbsp; 📞 {mobile}
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+ 
 
 # ════════════════════════════════════════════════════════════════════
 # مساعد PDF
@@ -976,131 +1062,280 @@ def page_classes():
 # إدارة الطلاب
 # ════════════════════════════════════════════════════════════════════
 def page_students():
-    st.title("👨‍🎓 إدارة شؤون الطلاب")
-    st.markdown("<p style='color: #78909c; font-size: 1.05rem;'>إدارة بيانات الطلاب والترتيب التلقائي حسب العمر (الرقم الشخصي)</p>", unsafe_allow_html=True)
-
-    classes = get_classes()
-    if not classes:
-        st.warning("⚠️ يرجى إضافة صفوف دراسية أولاً.")
-        return
-
-    cls_map = {c["name"]: c["id"] for c in classes}
-
-    tab_list, tab_add, tab_import, tab_move = st.tabs(
-        ["📋 قائمة الطلاب", "➕ إضافة طالب", "📥 استيراد Excel", "↔ نقل طالب"]
+    # ── جلب البيانات ──────────────────────────────────────────
+    all_students     = get_all_students()        # ← دالتك الأصلية
+    available_classes = get_classes()             # ← دالتك الأصلية
+    class_names      = [c["name"] for c in available_classes]
+    total_count      = len(all_students)
+ 
+    # ── حالة نموذج الإضافة ────────────────────────────────────
+    if "add_temp" not in st.session_state:
+        st.session_state.add_temp = {
+            "pid": "", "name": "", "mob": "", "other": "",
+            "sch": "", "h": "", "r": "", "b": "", "a": "",
+            "notes": "", "cls_idx": 0,
+        }
+ 
+    # ── العنوان ───────────────────────────────────────────────
+    st.markdown(
+        f"### 👨‍🎓 نظام إدارة الطلاب "
+        f"<span style='background:#1a237e;color:white;padding:3px 12px;"
+        f"border-radius:12px;font-size:.9rem;'>العدد الإجمالي: {total_count}</span>",
+        unsafe_allow_html=True,
     )
+ 
+    # ── شريط البحث والفلتر ────────────────────────────────────
+    c_search, c_filter = st.columns([3, 1])
+    with c_search:
+        search_query = st.text_input(
+            "🔍 ابحث عن طالب:",
+            placeholder="الاسم أو الرقم الشخصي...",
+            label_visibility="collapsed",
+        )
+    with c_filter:
+        filter_option = st.selectbox(
+            "الفرقة",
+            options=["الكل", "غير محددة"] + class_names,
+            label_visibility="collapsed",
+        )
+ 
+    # ══════════════════════════════════════════════════════════
+    #  نافذة إضافة طالب جديد
+    # ══════════════════════════════════════════════════════════
+    with st.popover("➕ إضافة طالب جديد", use_container_width=True):
+        st.subheader("📝 تسجيل بيانات الطالب")
+ 
+        col_img, col_main = st.columns([1, 2.5])
+ 
+        with col_img:
+            st.markdown("**الصورة الشخصية**")
+            photo_in = st.file_uploader(
+                "اختر صورة",
+                type=["jpg", "jpeg", "png"],
+                label_visibility="collapsed",
+                key="add_photo",
+            )
+            if photo_in:
+                st.image(photo_in, use_container_width=True)
+            else:
+                st.markdown(
+                    """
+                    <div style='width:100%;height:160px;border:2px dashed #1a237e;
+                                border-radius:14px;display:flex;flex-direction:column;
+                                align-items:center;justify-content:center;
+                                color:#1a237e;background:#f3f4fb;gap:6px;'>
+                        <span style='font-size:2.2rem;'>🖼️</span>
+                        <span style='font-size:.8rem;'>اسحب الصورة هنا</span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+ 
+        with col_main:
+            p_in   = st.text_input("الرقم الشخصي *",   value=st.session_state.add_temp["pid"],  placeholder="مثال: 050123456")
+            n_in   = st.text_input("الاسم الرباعي *",   value=st.session_state.add_temp["name"], placeholder="الاسم الكامل")
+            sch_in = st.text_input("المدرسة",            value=st.session_state.add_temp["sch"])
+            cls_in = st.selectbox(
+                "الفرقة",
+                options=["غير محدد"] + class_names,
+                index=st.session_state.add_temp["cls_idx"],
+            )
+ 
+        with st.container(border=True):
+            st.write("📞 التواصل والعنوان")
+            cc1, cc2 = st.columns(2)
+            m_in = cc1.text_input("الموبايل",   value=st.session_state.add_temp["mob"])
+            o_in = cc2.text_input("هاتف آخر",   value=st.session_state.add_temp["other"])
+ 
+            ca1, ca2, ca3, ca4 = st.columns(4)
+            h_in = ca1.text_input("منزل",   value=st.session_state.add_temp["h"])
+            r_in = ca2.text_input("طريق",   value=st.session_state.add_temp["r"])
+            b_in = ca3.text_input("مجمع",   value=st.session_state.add_temp["b"])
+            a_in = ca4.text_input("منطقة",  value=st.session_state.add_temp["a"])
+            not_in = st.text_area("ملاحظات إضافية", value=st.session_state.add_temp["notes"])
+ 
+        if st.button("حفظ الطالب في النظام ✅", type="primary", use_container_width=True):
+            clean_p = convert_numbers_to_en(p_in.strip())
+ 
+            # احتفظ بالبيانات المؤقتة
+            st.session_state.add_temp.update({
+                "pid": clean_p, "name": n_in,
+                "mob": convert_numbers_to_en(m_in),
+                "other": convert_numbers_to_en(o_in),
+                "sch": sch_in, "h": h_in, "r": r_in,
+                "b": b_in, "a": a_in, "notes": not_in,
+                "cls_idx": (["غير محدد"] + class_names).index(cls_in),
+            })
+ 
+            if check_personal_id_exists(clean_p):          # ← دالتك الأصلية
+                st.error(f"⚠️ الرقم الشخصي ({clean_p}) مسجل مسبقاً.")
+            elif len(clean_p) != 9 or not n_in.strip():
+                st.error("⚠️ أدخل الاسم و 9 أرقام للرقم الشخصي.")
+            else:
+                photo_bytes = photo_in.read() if photo_in else None
+                target_id   = next((c["id"] for c in available_classes if c["name"] == cls_in), None)
+ 
+                add_student_full(                            # ← دالتك الأصلية
+                    clean_p, n_in, target_id,
+                    convert_numbers_to_en(m_in),
+                    convert_numbers_to_en(o_in),
+                    h_in, r_in, b_in, a_in,
+                    sch_in, cls_in, None, photo_bytes, not_in,
+                )
+ 
+                st.success(f"✅ تم حفظ الطالب {n_in} بنجاح!")
+                # تصفير النموذج
+                st.session_state.add_temp = {
+                    k: (0 if k == "cls_idx" else "")
+                    for k in st.session_state.add_temp
+                }
+                time.sleep(0.8)
+                st.rerun()
+ 
+    st.divider()
+ 
+    # ══════════════════════════════════════════════════════════
+    #  فلترة وعرض الطلاب
+    # ══════════════════════════════════════════════════════════
+    filtered_students = []
+    for std in all_students:
+        matches_search = not search_query or (
+            search_query.lower() in std["name"].lower()
+            or search_query in std["personal_id"]
+        )
+        matches_filter = (
+            filter_option == "الكل"
+            or (filter_option == "غير محددة" and std.get("class_name") in [None, "غير محدد", ""])
+            or std.get("class_name") == filter_option
+        )
+        if matches_search and matches_filter:
+            filtered_students.append(std)
+ 
+    filtered_students.sort(key=lambda x: x["personal_id"])
+ 
+    if search_query and not filtered_students:
+        st.warning(f"🔍 لا يوجد طالب مطابق لـ: «{search_query}»")
+        return
+ 
+    # ── عرض كل طالب ──────────────────────────────────────────
+    for std in filtered_students:
+ 
+        # بطاقة العرض الجميلة
+        render_student_card(std)
+ 
+       # ══════════════════════════════════════════════════════════
+        #  نافذة التعديل والحذف  — استبدل الكود القديم بهذا كاملاً
+        # ══════════════════════════════════════════════════════════
+        with st.popover(f"⚙️ إدارة بيانات {std['name']}", use_container_width=True):
 
-    # ── 1. قائمة الطلاب ──
-    with tab_list:
-        st.markdown("<div style='background: #f8f9fa; padding: 15px 20px 5px 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #eef2f7;'>", unsafe_allow_html=True)
-        col_filter, col_search = st.columns([1, 1])
-        with col_filter:
-            filter_cls = st.selectbox("📌 عرض حسب الصف:", ["الكل"] + list(cls_map.keys()), key="filter_cls")
-        with col_search:
-            search = st.text_input("🔍 بحث بالرقم أو الاسم:", key="search_std", placeholder="اكتب للبحث...")
-        st.markdown("</div>", unsafe_allow_html=True)
+            st.subheader("📝 تعديل البيانات")
 
-        all_students = get_all_students()
-        
-        if filter_cls != "الكل":
-            all_students = [s for s in all_students if s["class_name"] == filter_cls]
-        if search:
-            search_en = convert_numbers_to_en(search)
-            all_students = [s for s in all_students if search_en in s["name"] or search_en in s["personal_id"]]
+            # ── الصورة ────────────────────────────────────────────
+            col_ep, col_ef = st.columns([1, 2.5])
 
-        st.info(f"📊 الطلاب المسجلون حالياً: {len(all_students)} (مرتبون من الأكبر سناً للأصغر)")
-
-        if not all_students:
-            st.info("لا توجد بيانات.")
-        else:
-            for i, std in enumerate(all_students, 1):
-                with st.container():
-                    st.markdown("""
-                    <div style='background: white; border: 1px solid #eef2f7; border-radius: 10px; padding: 12px 15px; margin-bottom: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);'>
-                    """, unsafe_allow_html=True)
-                    c_num, c_pid, c_name, c_cls, c_action = st.columns([0.4, 1.2, 2.8, 1.4, 1])
-                    with c_num: st.markdown(f"<div style='color: #90a4ae; padding-top: 5px;'>{i}</div>", unsafe_allow_html=True)
-                    with c_pid: st.markdown(f"<div style='color: #ef6c00; font-family: monospace; font-size: 1.1rem; padding-top: 4px; font-weight: bold;'>{std['personal_id']}</div>", unsafe_allow_html=True)
-                    with c_name: st.markdown(f"<div style='color: #1a237e; font-weight: bold; font-size: 1.1rem; padding-top: 4px; text-align: right;'>{std['name']}</div>", unsafe_allow_html=True)
-                    with c_cls: st.markdown(f"<div style='background: #e8eaf6; color: #3949ab; padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; text-align: center; margin-top: 4px;'>{std['class_name']}</div>", unsafe_allow_html=True)
-                    with c_action:
-                        with st.popover("🗑 حذف", use_container_width=True):
-                            if st.button("تأكيد الحذف", key=f"del_std_{std['id']}", type="primary", use_container_width=True):
-                                delete_student(std["id"]); st.rerun()
-                    st.markdown("</div>", unsafe_allow_html=True)
-
-    # ── 2. إضافة طالب ──
-    with tab_add:
-        st.markdown("<div style='background: white; padding: 25px; border-radius: 15px; border: 1px solid #eef2f7;'>", unsafe_allow_html=True)
-        st.subheader("➕ تسجيل طالب جديد")
-        
-        with st.form("add_student_form", clear_on_submit=True):
-            sel_cls = st.selectbox("اختر الصف الدراسي", list(cls_map.keys()))
-            
-            c_pid_col, c_name_col = st.columns(2)
-            with c_pid_col:
-                std_pid = st.text_input("الرقم الشخصي", placeholder="يجب أن يتكون من 9 أرقام فقط...")
-            with c_name_col:
-                std_name = st.text_input("اسم الطالب الرباعي", placeholder="أدخل الاسم كاملاً...")
-            
-            st.write("")
-            submit_add = st.form_submit_button("حفظ بيانات الطالب 💾", type="primary", use_container_width=True)
-            
-            if submit_add:
-                pid_raw = std_pid.strip()
-                pid_en = convert_numbers_to_en(pid_raw)
-                name = std_name.strip()
-                
-                # التحقق الشامل من المدخلات
-                if not name or not pid_en:
-                    st.error("⚠️ يرجى ملء كافة الحقول.")
-                elif not pid_en.isdigit() or len(pid_en) != 9:
-                    st.error("⚠️ الرقم الشخصي غير صحيح. تأكد من إدخال 9 أرقام فقط.")
+            with col_ep:
+                st.markdown("**الصورة الشخصية**")
+                if std.get("photo"):
+                    st.image(std["photo"], use_container_width=True)
                 else:
-                    existing = check_personal_id_exists(pid_en)
-                    if existing:
-                        st.error(f"⚠️ الرقم الشخصي ({pid_en}) مسجل مسبقاً للطالب '{existing['student_name']}' في '{existing['class_name']}'.")
-                    else:
-                        add_student(pid_en, name, cls_map[sel_cls])
-                        st.success(f"✅ تم تسجيل الطالب '{name}' بنجاح. جاري التحديث...")
-                        import time
-                        time.sleep(1) # تأخير زمني بسيط لرؤية رسالة النجاح
-                        st.rerun()    # تحديث الصفحة مباشرة لعرض الطالب الجديد في القائمة
-        st.markdown("</div>", unsafe_allow_html=True)
+                    initials = "".join([w[0] for w in std["name"].split()[:2]])
+                    st.markdown(
+                        f"<div style='width:100%;aspect-ratio:1;border-radius:12px;"
+                        f"background:#e8eaf6;display:flex;align-items:center;"
+                        f"justify-content:center;font-size:2rem;font-weight:700;"
+                        f"color:#1a237e;'>{initials}</div>",
+                        unsafe_allow_html=True,
+                    )
+                e_photo_up = st.file_uploader(
+                    "تغيير الصورة",
+                    type=["jpg", "jpeg", "png"],
+                    key=f"photo_{std['id']}",
+                )
 
-    # ── 3. استيراد Excel ──
-    with tab_import:
-        st.info("📥 تأكد من وجود أعمدة: الصف، الرقم الشخصي، الطالب")
-        uploaded = st.file_uploader("اختر ملف Excel", type=["xlsx", "xls"])
-        if uploaded:
-            try:
-                df = pd.read_excel(uploaded)
-                if "الرقم الشخصي" in df.columns:
-                    # تحويل الأرقام وإزالة أي مسافات
-                    df["الرقم الشخصي"] = df["الرقم الشخصي"].apply(lambda x: convert_numbers_to_en(str(x).replace('.0', '')))
-                
-                if st.button("📥 بدء استيراد البيانات", type="primary", use_container_width=True):
-                    added = import_students_from_df(df)
-                    st.success(f"✅ تم استيراد {added} طالب. (الطلاب بأرقام غير مكتملة أو مكررة تم تخطيهم).")
-                    import time; time.sleep(1.5); st.rerun()
-            except Exception as e:
-                st.error(f"❌ خطأ: {e}")
+            # ── نموذج التعديل (بدون أزرار الحذف) ─────────────────
+            with col_ef:
+                with st.form(f"edit_form_{std['id']}"):
+                    fe1, fe2 = st.columns(2)
+                    fe1.text_input("الرقم الشخصي", value=std["personal_id"], disabled=True)
+                    e_name = fe2.text_input("الاسم الرباعي", value=std["name"])
 
-    # ── 4. نقل طالب ──
-    with tab_move:
-        all_for_move = get_all_students()
-        if all_for_move:
-            std_options = {f"{s['personal_id']} - {s['name']}": s for s in all_for_move}
-            selected_label = st.selectbox("اختر الطالب المراد نقله:", list(std_options.keys()))
-            selected_std = std_options[selected_label]
-            other_classes = [c for c in list(cls_map.keys()) if c != selected_std["class_name"]]
-            
-            if other_classes:
-                new_cls_name = st.selectbox("الصف الجديد:", other_classes)
-                if st.button("تأكيد النقل ↔", type="primary", use_container_width=True):
-                    move_student(selected_std["id"], cls_map[new_cls_name])
-                    st.success(f"✅ تم نقل الطالب بنجاح.")
-                    import time; time.sleep(1); st.rerun()
+                    fec1, fec2 = st.columns(2)
+                    e_sch = fec1.text_input("المدرسة", value=std.get("school_name", ""))
+
+                    cls_options = ["غير محدد"] + class_names
+                    current_cls = std.get("class_name", "")
+                    cls_index   = cls_options.index(current_cls) if current_cls in cls_options else 0
+                    e_cls = fec2.selectbox("الفرقة", options=cls_options, index=cls_index)
+
+                    st.write("📍 العنوان والاتصال")
+                    ea1, ea2, ea3, ea4 = st.columns(4)
+                    e_h = ea1.text_input("منزل",  value=std.get("house", ""))
+                    e_r = ea2.text_input("طريق",  value=std.get("road",  ""))
+                    e_b = ea3.text_input("مجمع",  value=std.get("block", ""))
+                    e_a = ea4.text_input("منطقة", value=std.get("area",  ""))
+
+                    em1, em2 = st.columns(2)
+                    e_mob   = em1.text_input("الموبايل", value=std.get("mobile", ""))
+                    e_oth   = em2.text_input("رقم آخر",  value=std.get("phone",  ""))
+                    e_notes = st.text_area("الملاحظات",  value=std.get("notes",  ""))
+
+                    # زر التحديث فقط داخل الـ form
+                    if st.form_submit_button("تحديث ✅", type="primary", use_container_width=True):
+                        new_photo  = e_photo_up.read() if e_photo_up else std.get("photo")
+                        new_cls_id = next(
+                            (c["id"] for c in available_classes if c["name"] == e_cls),
+                            None,
+                        )
+                        update_student_full(                 # ← دالتك الأصلية
+                            std["id"], std["personal_id"],
+                            e_name, new_cls_id,
+                            convert_numbers_to_en(e_mob),
+                            convert_numbers_to_en(e_oth),
+                            e_h, e_r, e_b, e_a,
+                            e_sch, e_cls, None, new_photo, e_notes,
+                        )
+                        st.success("✅ تم التحديث بنجاح!")
+                        time.sleep(0.6)
+                        st.rerun()
+
+            # ── الحذف خارج الـ form تماماً ────────────────────────
+            st.divider()
+
+            # مفتاح session_state لإظهار تأكيد الحذف
+            del_key = f"show_del_{std['id']}"
+            if del_key not in st.session_state:
+                st.session_state[del_key] = False
+
+            if st.button(
+                "🗑️ حذف الطالب",
+                key=f"del_btn_{std['id']}",
+                use_container_width=True,
+            ):
+                st.session_state[del_key] = True
+
+            # تأكيد الحذف يظهر فقط بعد الضغط على الزر
+            if st.session_state[del_key]:
+                st.warning(f"⚠️ هل أنت متأكد من حذف الطالب **{std['name']}**؟ لا يمكن التراجع عن هذا الإجراء.")
+                c_confirm, c_cancel = st.columns(2)
+
+                if c_confirm.button(
+                    "نعم، احذف نهائياً 🗑️",
+                    key=f"del_confirm_{std['id']}",
+                    type="primary",
+                    use_container_width=True,
+                ):
+                    delete_student(std["id"])            # ← دالتك الأصلية
+                    st.session_state[del_key] = False
+                    st.rerun()
+
+                if c_cancel.button(
+                    "إلغاء",
+                    key=f"del_cancel_{std['id']}",
+                    use_container_width=True,
+                ):
+                    st.session_state[del_key] = False
+                    st.rerun()
+ 
 # ════════════════════════════════════════════════════════════════════
 # الأرشيف والتقارير
 # ════════════════════════════════════════════════════════════════════
