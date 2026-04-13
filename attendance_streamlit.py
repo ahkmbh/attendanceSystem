@@ -151,7 +151,275 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ─────────────────────────────────────────────
+#  CSS المخصص للصفحة
+# ─────────────────────────────────────────────
+ 
+PAGE_CSS = """
+<style>
+/* ── إخفاء عناصر Streamlit الزائدة ── */
+#MainMenu, footer, header { visibility: hidden; }
+[data-testid="stToolbar"] { display: none; }
+ 
+/* ── إعادة ضبط الاتجاه ── */
+html, body, [data-testid="stAppViewContainer"] {
+    direction: rtl;
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+}
+ 
+/* ── بطاقات الإحصائيات ── */
+[data-testid="metric-container"] {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    border: 1px solid #e9ecef;
+}
+[data-testid="metric-container"] label {
+    font-size: 13px !important;
+    color: #6c757d !important;
+}
+[data-testid="stMetricValue"] {
+    font-size: 2rem !important;
+    font-weight: 600 !important;
+    color: #212529 !important;
+}
+ 
+/* ── بطاقات الصفوف ── */
+.class-card {
+    background: #ffffff;
+    border: 1px solid #e9ecef;
+    border-radius: 14px;
+    padding: 0;
+    margin-bottom: 10px;
+    overflow: hidden;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.class-card:hover {
+    border-color: #ced4da;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+.class-card-inner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+}
+.accent-bar {
+    width: 5px;
+    height: 44px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+.class-info { flex: 1; min-width: 0; }
+.class-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #212529;
+    margin-bottom: 3px;
+}
+.class-meta {
+    font-size: 13px;
+    color: #6c757d;
+}
+ 
+/* ── نتيجة البحث الفارغة ── */
+.no-results {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #adb5bd;
+    font-size: 15px;
+}
+ 
+/* ── تحسين مظهر حقول الإدخال ── */
+[data-testid="stTextInput"] input {
+    border-radius: 10px !important;
+    border: 1px solid #dee2e6 !important;
+    padding: 0.5rem 0.75rem !important;
+    font-size: 14px !important;
+    direction: rtl !important;
+}
+[data-testid="stTextInput"] input:focus {
+    border-color: #80bdff !important;
+    box-shadow: 0 0 0 3px rgba(0,123,255,0.12) !important;
+}
+ 
+/* ── تحسين الأزرار ── */
+[data-testid="stButton"] button {
+    border-radius: 8px !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    transition: all 0.15s ease !important;
+}
+ 
+/* ── إشعار النجاح ── */
+[data-testid="stSuccess"] {
+    border-radius: 10px !important;
+    direction: rtl;
+}
+[data-testid="stWarning"] {
+    border-radius: 10px !important;
+    direction: rtl;
+}
+[data-testid="stError"] {
+    border-radius: 10px !important;
+    direction: rtl;
+}
+ 
+/* ── الـ Dialog ── */
+[data-testid="stDialog"] [data-testid="stVerticalBlock"] {
+    direction: rtl;
+}
+ 
+/* ── عنوان الصفحة ── */
+.page-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 0.5rem;
+}
+.page-title {
+    font-size: 26px;
+    font-weight: 700;
+    color: #212529;
+    margin: 0;
+}
+ 
+/* ── شريط البحث ── */
+.search-label {
+    font-size: 13px;
+    color: #6c757d;
+    margin-bottom: 4px;
+}
+ 
+/* ── قسم القائمة ── */
+.list-header {
+    font-size: 13px;
+    color: #6c757d;
+    font-weight: 500;
+    margin: 1rem 0 0.75rem;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f1f3f5;
+}
+ 
+/* ── شارة عدد الطلاب ── */
+.student-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #f1f3f5;
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 12px;
+    color: #495057;
+    font-weight: 500;
+}
+</style>
+"""
+ 
+# ألوان مميزة لكل صف (تتكرر دورياً)
+ACCENT_COLORS = [
+    "#5DCAA5", "#7F77DD", "#D85A30",
+    "#378ADD", "#D4537E", "#639922", "#EF9F27",
+]
+ 
+ 
+def get_accent(class_id: int) -> str:
+    return ACCENT_COLORS[(class_id - 1) % len(ACCENT_COLORS)]
+ 
+
 DB_FILE = "school_attendance.db"
+
+
+# ─────────────────────────────────────────────
+#  الـ Dialogs (نوافذ منبثقة)
+# ─────────────────────────────────────────────
+ 
+@st.dialog("➕ إضافة صف جديد")
+def dialog_add_class(existing_names: list[str]):
+    st.markdown("أدخل اسم الصف الذي تريد إضافته.")
+    name = st.text_input(
+        "اسم الصف الدراسي",
+        placeholder="مثال: الصف الأول - أ",
+        key="dialog_new_name",
+    )
+ 
+    col_save, col_cancel = st.columns([1, 1])
+    with col_save:
+        if st.button("💾 حفظ", use_container_width=True, type="primary"):
+            clean = name.strip()
+            if not clean:
+                st.error("⚠️ يرجى إدخال اسم الصف.")
+            elif clean in existing_names:
+                st.warning(f"⚠️ الصف «{clean}» موجود بالفعل!")
+            else:
+                add_class(clean)
+                # إعطاء الصف الجديد أعلى رقم ترتيب
+                with get_conn() as conn:
+                    classes = conn.execute(
+                        "SELECT position FROM classes WHERE position IS NOT NULL"
+                    ).fetchall()
+                    max_pos = max([r["position"] for r in classes] + [0])
+                    new_row = conn.execute(
+                        "SELECT id FROM classes WHERE name = ?", (clean,)
+                    ).fetchone()
+                    if new_row:
+                        conn.execute(
+                            "UPDATE classes SET position = ? WHERE id = ?",
+                            (max_pos + 1, new_row["id"]),
+                        )
+                st.session_state["toast"] = f"✅ تم إضافة «{clean}» بنجاح"
+                st.rerun()
+    with col_cancel:
+        if st.button("إلغاء", use_container_width=True):
+            st.rerun()
+ 
+ 
+@st.dialog("✏️ تعديل اسم الصف")
+def dialog_edit_class(cls: dict, other_names: list[str]):
+    new_name = st.text_input(
+        "الاسم الجديد",
+        value=cls["name"],
+        key=f"dialog_edit_{cls['id']}",
+    )
+ 
+    col_save, col_cancel = st.columns([1, 1])
+    with col_save:
+        if st.button("💾 تحديث", use_container_width=True, type="primary"):
+            clean = new_name.strip()
+            if not clean:
+                st.error("⚠️ الاسم لا يمكن أن يكون فارغاً.")
+            elif clean in other_names:
+                st.warning(f"⚠️ الاسم «{clean}» مستخدم بالفعل!")
+            else:
+                update_class_name(cls["id"], clean)
+                st.session_state["toast"] = f"✅ تم تحديث الاسم إلى «{clean}»"
+                st.rerun()
+    with col_cancel:
+        if st.button("إلغاء", use_container_width=True):
+            st.rerun()
+ 
+ 
+@st.dialog("🗑️ تأكيد الحذف")
+def dialog_delete_class(cls: dict, student_count: int):
+    st.markdown(f"هل أنت متأكد من حذف الصف؟")
+    st.markdown(f"### {cls['name']}")
+ 
+    if student_count > 0:
+        st.warning(
+            f"⚠️ تحذير: يوجد **{student_count}** طالب مسجّل في هذا الصف. "
+            "سيتم حذف جميع بياناتهم أيضاً."
+        )
+ 
+    col_del, col_cancel = st.columns([1, 1])
+    with col_del:
+        if st.button("🗑️ حذف نهائياً", use_container_width=True, type="primary"):
+            delete_class(cls["id"])
+            st.session_state["toast"] = f"🗑️ تم حذف «{cls['name']}»"
+            st.rerun()
+    with col_cancel:
+        if st.button("إلغاء", use_container_width=True):
+            st.rerun()
+ 
 
 # ════════════════════════════════════════════════════════════════════
 # قاعدة البيانات SQLite
@@ -445,6 +713,44 @@ def get_class_today_pct(class_id: int, date: str, total: int):
         ).fetchone()["c"]
     return int((h / total) * 100)
 
+
+def update_class_name(class_id, new_name):
+    # استخدام سياق with مباشرة لأن الدالة contextmanager
+    with get_conn() as conn:
+        conn.execute("UPDATE classes SET name = ? WHERE id = ?", (new_name, class_id))
+
+def delete_class(class_id):
+    with get_conn() as conn:
+        conn.execute("DELETE FROM classes WHERE id = ?", (class_id,))
+
+
+# دالة ذكية لتجهيز قاعدة البيانات (تعمل مرة واحدة فقط)
+def setup_order_column():
+    with get_conn() as conn:
+        try:
+            # محاولة إضافة عمود الترتيب
+            conn.execute("ALTER TABLE classes ADD COLUMN position INTEGER")
+            
+            # إعطاء ترتيب مبدئي للصفوف الحالية لكي لا تكون فارغة
+            cursor = conn.execute("SELECT id FROM classes ORDER BY id")
+            rows = cursor.fetchall()
+            for i, row in enumerate(rows):
+                conn.execute("UPDATE classes SET position = ? WHERE id = ?", (i + 1, row['id']))
+        except sqlite3.OperationalError:
+            # إذا كان العمود موجوداً بالفعل (في المرات القادمة)، سيتجاهل الأمر بصمت
+            pass
+
+# دالة جلب الصفوف مرتبة حسب عمود الترتيب (بدلاً من get_classes)
+def get_ordered_classes():
+    with get_conn() as conn:
+        # ترتيب تنازلي: الأحدث/الأعلى في قمة القائمة
+        return conn.execute("SELECT * FROM classes ORDER BY position DESC").fetchall()
+
+# دالة التبديل الآمنة (تتبادل المواقع وليس الأسماء لحماية الطلاب)
+def swap_positions(id1, pos1, id2, pos2):
+    with get_conn() as conn:
+        conn.execute("UPDATE classes SET position = ? WHERE id = ?", (pos2, id1))
+        conn.execute("UPDATE classes SET position = ? WHERE id = ?", (pos1, id2))
 
 # ============================================================
 #  دالة: بطاقة عرض الطالب
@@ -991,89 +1297,184 @@ def page_attendance():
 # ════════════════════════════════════════════════════════════════════
 # إدارة الصفوف
 # ════════════════════════════════════════════════════════════════════
+
 def page_classes():
-    st.title("🏫 إدارة الصفوف الدراسية")
-    st.markdown("<p style='color: #78909c;'>إضافة وتعديل وحذف الصفوف والمجموعات الدراسية</p>", unsafe_allow_html=True)
-
-    classes = get_classes()
-    total_classes = len(classes)
-    total_students = sum(len(get_students(c["id"])) for c in classes)
-
-    # ── 1. إحصائيات سريعة ──
-    c1, c2, _ = st.columns([1, 1, 2])
-    with c1:
-        st.markdown(f"""
-        <div style='background: #e8eaf6; padding: 15px; border-radius: 12px; text-align: center; border: 1px solid #c5cae9;'>
-            <div style='font-size: 0.9rem; color: #1a237e; font-weight: bold;'>إجمالي الصفوف</div>
-            <div style='font-size: 1.8rem; font-weight: 800; color: #1a237e;'>{total_classes}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"""
-        <div style='background: #f1f8e9; padding: 15px; border-radius: 12px; text-align: center; border: 1px solid #c5cae9;'>
-            <div style='font-size: 0.9rem; color: #2e7d32; font-weight: bold;'>إجمالي الطلاب</div>
-            <div style='font-size: 1.8rem; font-weight: 800; color: #2e7d32;'>{total_students}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # ── 2. إضافة صف جديد ──
-    with st.container():
-        st.markdown("<div style='background: #ffffff; padding: 20px; border-radius: 15px; border: 1px solid #eef2f7; box-shadow: 0 4px 12px rgba(0,0,0,0.03);'>", unsafe_allow_html=True)
-        st.subheader("➕ إضافة صف جديد")
-        with st.form("add_class_form", clear_on_submit=True):
-            new_cls = st.text_input("اسم الصف الدراسي", placeholder="مثال: الصف الأول - المجموعة أ")
-            submit_btn = st.form_submit_button("حفظ الصف الجديد 💾", use_container_width=True)
-            
-            if submit_btn:
-                name = new_cls.strip()
-                if not name:
-                    st.error("⚠️ يرجى كتابة اسم الصف")
-                else:
-                    try:
-                        add_class(name)
-                        st.success(f"✅ تم إضافة '{name}' بنجاح")
-                        st.rerun()
-                    except Exception:
-                        st.error("⚠️ هذا الصف موجود مسبقاً")
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # ── 3. عرض القائمة الحالية ──
-    st.subheader("📋 الصفوف الحالية")
+    # تهيئة قاعدة البيانات
+    setup_order_column()
+ 
+    # حقن CSS
+    st.markdown(PAGE_CSS, unsafe_allow_html=True)
+ 
+    # ── عنوان الصفحة ──
+    st.markdown(
+        '<div class="page-header">'
+        '<span style="font-size:30px">🏫</span>'
+        '<h1 class="page-title">إدارة الصفوف الدراسية</h1>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+ 
+    # ── جلب البيانات ──
+    raw_classes = get_ordered_classes()
+    classes_list = [dict(c) for c in raw_classes]
+ 
+    # حساب عدد الطلاب مرة واحدة
+    students_map = {c["id"]: len(get_students(c["id"])) for c in classes_list}
+    total_students = sum(students_map.values())
+ 
+    # ── إظهار Toast إن وُجد ──
+    if "toast" in st.session_state and st.session_state["toast"]:
+        st.success(st.session_state["toast"])
+        st.session_state["toast"] = ""
+ 
+   # ── بطاقات الإحصائيات (بتصميم حديث) ──
+   # ── بطاقات الإحصائيات (طابع مؤسسي رسمي) ──
+    col1, col2 = st.columns(2)
     
-    if not classes:
-        st.info("لا توجد صفوف مضافة حالياً. ابدأ بإضافة أول صف من النموذج أعلاه.")
-    else:
-        for cls in classes:
-            student_count = len(get_students(cls["id"]))
+    with col1:
+        st.markdown(
+            f"""
+            <div style="background-color: #ffffff; 
+                        border: 1px solid #e2e8f0;
+                        border-right: 5px solid #1e3a8a; /* أزرق مؤسسي داكن */
+                        padding: 20px; 
+                        border-radius: 8px; 
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.1); 
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                        direction: rtl;">
+                <div>
+                    <div style="color: #64748b; font-size: 1.05rem; font-weight: 600; margin-bottom: 5px;">إجمالي الصفوف</div>
+                    <div style="color: #0f172a; font-size: 2.2rem; font-weight: bold; line-height: 1;">{len(classes_list)}</div>
+                </div>
+                <div style="font-size: 2.5rem; opacity: 0.8; background: #f1f5f9; padding: 10px; border-radius: 50%;">🏫</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        
+    with col2:
+        st.markdown(
+            f"""
+            <div style="background-color: #ffffff; 
+                        border: 1px solid #e2e8f0;
+                        border-right: 5px solid #0f766e; /* أخضر زمردي هادئ */
+                        padding: 20px; 
+                        border-radius: 8px; 
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.1); 
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                        direction: rtl;">
+                <div>
+                    <div style="color: #64748b; font-size: 1.05rem; font-weight: 600; margin-bottom: 5px;">إجمالي الطلاب</div>
+                    <div style="color: #0f172a; font-size: 2.2rem; font-weight: bold; line-height: 1;">{total_students}</div>
+                </div>
+                <div style="font-size: 2.5rem; opacity: 0.8; background: #f1f5f9; padding: 10px; border-radius: 50%;">🎓</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+ 
+    st.divider()
+ 
+    # ── شريط البحث + زر الإضافة ──
+    col_search, col_btn = st.columns([4, 1])
+    with col_search:
+        search_query = st.text_input(
+            "🔍 بحث",
+            placeholder="ابحث عن صف...",
+            label_visibility="collapsed",
+            key="search_classes",
+        )
+    with col_btn:
+        if st.button("➕ إضافة صف", use_container_width=True, type="primary"):
+            st.session_state["open_add_dialog"] = True
+ 
+    # ── فتح نافذة الإضافة ──
+    if st.session_state.get("open_add_dialog"):
+        st.session_state["open_add_dialog"] = False
+        existing = [c["name"] for c in classes_list]
+        dialog_add_class(existing)
+ 
+    # ── فلترة القائمة بالبحث ──
+    query = search_query.strip()
+    filtered = (
+        [c for c in classes_list if query in c["name"]]
+        if query
+        else classes_list
+    )
+ 
+    # ── رأس القائمة ──
+    count_label = f"{len(filtered)} صف" + (" (نتائج البحث)" if query else "")
+    st.markdown(
+        f'<div class="list-header">📋 القائمة الحالية · {count_label}</div>',
+        unsafe_allow_html=True,
+    )
+ 
+    # ── حالة القائمة الفارغة ──
+    if not filtered:
+        msg = "لا توجد نتائج مطابقة للبحث." if query else "لا توجد صفوف مضافة حتى الآن."
+        st.markdown(f'<div class="no-results">{msg}</div>', unsafe_allow_html=True)
+        return
+ 
+    # ── عرض بطاقات الصفوف والتعديل/الحذف ──
+    for index, cls in enumerate(filtered):
+        color = get_accent(cls["id"])
+        s_count = students_map.get(cls["id"], 0)
+        
+        # حاوية البطاقة
+        with st.container(border=True):
+            # تقسيم الأعمدة مع التوسيط العمودي
+            # 💡 ملاحظة: إذا كنت تستخدم إصدار قديم من Streamlit وظهر خطأ، قم بحذف vertical_alignment="center"
+            col_info, col_up, col_down, col_edit, col_del = st.columns(
+                [4, 0.5, 0.5, 1.2, 1.2], 
+                gap="small", 
+                vertical_alignment="center"
+            )
             
-            # تصميم بطاقة الصف
-            with st.container():
-                st.markdown(f"""
-                <div style='background: white; border: 1px solid #eef2f7; border-radius: 12px; padding: 15px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);'>
-                """, unsafe_allow_html=True)
-                
-                col_info, col_count, col_actions = st.columns([3, 1, 1])
-                
-                with col_info:
-                    st.markdown(f"<div style='font-size: 1.2rem; font-weight: bold; color: #1a237e; padding-top: 5px;'>🏫 {cls['name']}</div>", unsafe_allow_html=True)
-                
-                with col_count:
-                    st.markdown(f"<div style='background: #e3f2fd; color: #1e88e5; padding: 6px 12px; border-radius: 20px; text-align: center; font-weight: bold; margin-top: 5px;'>👤 {student_count} طالب</div>", unsafe_allow_html=True)
-                
-                with col_actions:
-                    # نافذة تأكيد الحذف منبثقة لمنع الخطأ
-                    with st.popover("🗑 حذف", use_container_width=True):
-                        st.markdown(f"<p style='color: #c62828;'>هل أنت متأكد من حذف <b>{cls['name']}</b>؟<br><small>سيؤدي ذلك لحذف كافة بيانات الطلاب والحضور المرتبطة به!</small></p>", unsafe_allow_html=True)
-                        if st.button("نعم، احذف نهائياً", key=f"del_{cls['id']}", type="primary", use_container_width=True):
-                            delete_class(cls["id"])
-                            st.rerun()
-                
-                st.markdown("</div>", unsafe_allow_html=True)
-
+            # معلومات الصف
+            with col_info:
+                st.markdown(
+                    f"""
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                      <div style="width: 6px; height: 45px; background-color: {color}; border-radius: 4px;"></div>
+                      <div>
+                        <div style="font-weight: bold; font-size: 1.1rem; margin-bottom: 2px;">{cls['name']}</div>
+                        <div style="color: gray; font-size: 0.9rem;">👤 {s_count} طالب</div>
+                      </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            
+            # زر سهم أعلى
+            with col_up:
+                up_disabled = index == 0
+                if st.button("▲", key=f"up_{cls['id']}", help="رفع للأعلى", disabled=up_disabled, use_container_width=True):
+                    prev = filtered[index - 1]
+                    swap_positions(cls["id"], cls["position"], prev["id"], prev["position"])
+                    st.rerun()
+            
+            # زر سهم أسفل
+            with col_down:
+                down_disabled = index == len(filtered) - 1
+                if st.button("▼", key=f"down_{cls['id']}", help="تنزيل للأسفل", disabled=down_disabled, use_container_width=True):
+                    nxt = filtered[index + 1]
+                    swap_positions(cls["id"], cls["position"], nxt["id"], nxt["position"])
+                    st.rerun()
+            
+            # زر تعديل
+            with col_edit:
+                if st.button("✏️ تعديل", key=f"edit_{cls['id']}", use_container_width=True):
+                    other_names = [c["name"] for c in classes_list if c["id"] != cls["id"]]
+                    dialog_edit_class(cls, other_names)
+            
+            # زر حذف
+            with col_del:
+                if st.button("🗑️ حذف", key=f"del_{cls['id']}", use_container_width=True):
+                    dialog_delete_class(cls, s_count)
 # ════════════════════════════════════════════════════════════════════
 # إدارة الطلاب
 # ════════════════════════════════════════════════════════════════════
