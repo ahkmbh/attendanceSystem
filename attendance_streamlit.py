@@ -39,14 +39,45 @@ from bidi.algorithm import get_display
 # إعدادات الصفحة
 # ════════════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="نظام الحضور ",
+    page_title="نظام الحضور",
     page_icon="🎓",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",  # ← غيّر من expanded إلى collapsed
 )
 
 # ── CSS مخصص للدعم العربي والألوان وتحسينات الهاتف ──────────────────
+st.markdown("""
+<style>
+@media (max-width: 768px) {
+    /* إخفاء الـ sidebar وكل عناصره */
+    section[data-testid="stSidebar"],
+    div[data-testid="stSidebar"],
+    div[data-testid="collapsedControl"],
+    button[kind="header"],
+    .st-emotion-cache-1gwvy71,
+    .st-emotion-cache-6qob1r,
+    [data-testid="stSidebarNav"],
+    [data-testid="stSidebarNavItems"] {
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
+        overflow: hidden !important;
+        visibility: hidden !important;
+    }
 
+    /* توسيع المحتوى الرئيسي ليملأ الشاشة كاملة */
+    .main, section.main {
+        margin-left: 0 !important;
+        padding-left: 0.5rem !important;
+    }
+    .block-container {
+        max-width: 100% !important;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
 
 st.markdown("""
     <style>
