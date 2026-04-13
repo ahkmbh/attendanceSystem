@@ -664,187 +664,186 @@ def page_login():
 # ════════════════════════════════════════════════════════════════════
 def render_sidebar():
 
-    role = st.session_state.get("role", "")
+    # ── شريط تنقل للموبايل (يظهر فقط على الشاشات الصغيرة) ──
+    role = st.session_state.role
     page = st.session_state.get("page", "home")
 
-    # ══════════════════════════════════════════════════════════
-    #  CSS: إخفاء الـ sidebar على الموبايل + إظهار navbar علوي
-    # ══════════════════════════════════════════════════════════
-    st.markdown("""
+    admin_links = ""
+    if role == "admin":
+        admin_links = f"""
+        <a class="nav-item {'active' if page == 'classes' else ''}" onclick="nav('classes')">🏫<span>الصفوف</span></a>
+        <a class="nav-item {'active' if page == 'students' else ''}" onclick="nav('students')">👨‍🎓<span>الطلاب</span></a>
+        <a class="nav-item {'active' if page == 'reports' else ''}" onclick="nav('reports')">📊<span>التقارير</span></a>
+        <a class="nav-item {'active' if page == 'users' else ''}" onclick="nav('users')">🔑<span>المستخدمين</span></a>
+        """
+
+    st.markdown(f"""
     <style>
-    @media (max-width: 768px) {
-        /* إخفاء الـ sidebar وزر فتحه */
-        div[data-testid="stSidebar"] { display: none !important; }
-        div[data-testid="collapsedControl"] { display: none !important; }
+    @media (max-width: 768px) {{
 
-        /* إزالة المسافة الجانبية التي يتركها الـ sidebar */
-        .main .block-container {
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
+        /* إخفاء الـ sidebar على الموبايل */
+        div[data-testid="stSidebar"],
+        div[data-testid="collapsedControl"] {{
+            display: none !important;
+        }}
+
+        /* توسيع المحتوى ليملأ الشاشة */
+        .main .block-container {{
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            padding-bottom: 80px !important;
             max-width: 100% !important;
-        }
+        }}
 
-        /* إظهار شريط التنقل العلوي */
-        .mobile-topbar { display: flex !important; }
-    }
+        /* شريط التنقل السفلي */
+        .mobile-nav {{
+            display: flex !important;
+        }}
+    }}
 
-    @media (min-width: 769px) {
-        .mobile-topbar { display: none !important; }
-    }
+    @media (min-width: 769px) {{
+        .mobile-nav {{ display: none !important; }}
+    }}
 
-    /* شريط التنقل العلوي للموبايل */
-    .mobile-topbar {
+    .mobile-nav {{
         display: none;
-        position: sticky;
-        top: 0;
+        position: fixed;
+        bottom: 0;
+        right: 0;
+        left: 0;
         z-index: 9999;
         background: #1a237e;
-        width: 100%;
-        padding: 0 6px;
-        height: 56px;
+        border-top: 2px solid #283593;
+        height: 64px;
+        justify-content: space-around;
         align-items: center;
-        justify-content: space-between;
-        gap: 4px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        margin-bottom: 12px;
-        border-radius: 0 0 12px 12px;
-    }
+        padding: 0 4px;
+    }}
 
-    .mobile-topbar .nav-btn {
+    .nav-item {{
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        background: transparent;
-        border: none;
-        border-radius: 8px;
-        color: #9fa8da;
-        font-size: 9px;
-        padding: 4px 6px;
-        cursor: pointer;
+        color: #9fa8da !important;
+        font-size: 10px;
         gap: 2px;
-        min-width: 44px;
-        transition: all 0.15s;
-        text-decoration: none;
-    }
+        padding: 6px 8px;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none !important;
+        min-width: 52px;
+    }}
 
-    .mobile-topbar .nav-btn .icon { font-size: 18px; line-height: 1; }
-    .mobile-topbar .nav-btn.active { color: #ffffff; background: #283593; }
-    .mobile-topbar .nav-btn.logout-btn { color: #ef9a9a; }
+    .nav-item span {{
+        font-size: 10px;
+        color: inherit;
+    }}
+
+    .nav-item:first-child {{
+        font-size: 18px;
+    }}
+
+    .nav-item.active {{
+        color: #ffffff !important;
+        background: #283593;
+    }}
+
+    .nav-item:hover {{
+        color: #ffffff !important;
+        background: rgba(255,255,255,0.1);
+    }}
     </style>
+
+    <div class="mobile-nav">
+        <a class="nav-item {'active' if page == 'home' else ''}" onclick="nav('home')">🏠<span>الرئيسية</span></a>
+        <a class="nav-item {'active' if page == 'attendance' else ''}" onclick="nav('attendance')">📝<span>الحضور</span></a>
+        {admin_links}
+        <a class="nav-item logout" onclick="nav('logout')" style="color:#ef9a9a !important;">🚪<span>خروج</span></a>
+    </div>
+
+    <script>
+    function nav(page) {{
+        // إرسال الصفحة المطلوبة عبر query params
+        const url = new URL(window.location.href);
+        url.searchParams.set('nav', page);
+        window.location.href = url.toString();
+    }}
+    </script>
     """, unsafe_allow_html=True)
 
-    # ══════════════════════════════════════════════════════════
-    #  شريط التنقل العلوي — أزرار Streamlit حقيقية
-    #  (تعمل بدون JavaScript)
-    # ══════════════════════════════════════════════════════════
-    st.markdown("<div class='mobile-topbar' id='mobile-nav'>", unsafe_allow_html=True)
+    # معالجة التنقل من الموبايل
+    params = st.query_params
+    if "nav" in params:
+        nav_page = params["nav"]
+        st.query_params.clear()
+        if nav_page == "logout":
+            for k in ["logged_in", "user", "role", "page"]:
+                st.session_state.pop(k, None)
+        else:
+            st.session_state.page = nav_page
+        st.rerun()
 
-    # نبني الأزرار داخل أعمدة
-    if role == "admin":
-        cols = st.columns(7)
-        pages = [
-            (cols[0], "🏠", "الرئيسية", "home"),
-            (cols[1], "📝", "الحضور",   "attendance"),
-            (cols[2], "🏫", "الصفوف",   "classes"),
-            (cols[3], "👨‍🎓", "الطلاب",   "students"),
-            (cols[4], "📊", "التقارير", "reports"),
-            (cols[5], "🔑", "المستخدمين","users"),
-            (cols[6], "🚪", "خروج",     "logout"),
-        ]
-    else:
-        cols = st.columns(3)
-        pages = [
-            (cols[0], "🏠", "الرئيسية", "home"),
-            (cols[1], "📝", "الحضور",   "attendance"),
-            (cols[2], "🚪", "خروج",     "logout"),
-        ]
+    # ── الـ sidebar العادي للديسكتوب ──────────────────────────
 
-    for col, icon, label, key in pages:
-        with col:
-            is_active = (page == key)
-            btn_style = (
-                "background:#283593;color:white;border:none;border-radius:8px;"
-                "width:100%;padding:6px 2px;cursor:pointer;font-size:9px;"
-            ) if is_active else (
-                "background:transparent;color:#9fa8da;border:none;border-radius:8px;"
-                "width:100%;padding:6px 2px;cursor:pointer;font-size:9px;"
-            )
-            if key == "logout":
-                btn_style = btn_style.replace("#9fa8da", "#ef9a9a")
-
-            st.markdown(
-                f"<div style='{btn_style};text-align:center;'>"
-                f"<div style='font-size:18px;line-height:1;'>{icon}</div>"
-                f"<div>{label}</div></div>",
-                unsafe_allow_html=True,
-            )
-            if st.button(
-                f"{icon} {label}",
-                key=f"mob_nav_{key}",
-                use_container_width=True,
-                label_visibility="collapsed",
-            ):
-                if key == "logout":
-                    for k in ["logged_in", "user", "role", "page"]:
-                        st.session_state.pop(k, None)
-                else:
-                    st.session_state.page = key
-                st.rerun()
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # ══════════════════════════════════════════════════════════
-    #  الـ Sidebar العادي للديسكتوب — بدون تغيير
-    # ══════════════════════════════════════════════════════════
     with st.sidebar:
-        role_text = 'مشرف إداري' if st.session_state.role == 'admin' else 'معلم'
-
+        # الصندوق العلوي الأول: عنوان النظام
         st.markdown("""
-        <div style='background-color: #283593; color: #ffffff; text-align: center;
-                    padding: 14px; border-radius: 10px; margin-bottom: 12px;
+        <div style='background-color: #283593; color: #ffffff; text-align: center; 
+                    padding: 14px; border-radius: 10px; margin-bottom: 12px; 
                     box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 1.2rem; font-weight: bold;'>
             🎓 نظام الحضور
         </div>
         """, unsafe_allow_html=True)
 
+        # الصندوق العلوي الثاني: بيانات المستخدم
+        role_text = 'مشرف إداري' if st.session_state.role == 'admin' else 'معلم'
         st.markdown(f"""
-        <div style='background-color: #3949ab; color: #ffffff; text-align: center;
+        <div style='background-color: #3949ab; color: #ffffff; text-align: center; 
                     padding: 15px; border-radius: 10px; margin-bottom: 30px;
                     box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
             <div style='font-size: 1.1rem; font-weight: bold; margin-bottom: 6px;'>
                 👤 {st.session_state.user['name']}
             </div>
-            <div style='font-size: 0.95rem; opacity: 0.9;'>{role_text}</div>
+            <div style='font-size: 0.95rem; opacity: 0.9;'>
+                {role_text}
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
-        if st.button("🏠 الرئيسية",       use_container_width=True): st.session_state.page = "home";       st.rerun()
-        if st.button("📝 تسجيل الحضور",   use_container_width=True): st.session_state.page = "attendance"; st.rerun()
+        # أزرار القسم العام
+        if st.button("🏠 الرئيسية", use_container_width=True): st.session_state.page = "home"; st.rerun()
+        if st.button("📝 تسجيل الحضور", use_container_width=True): st.session_state.page = "attendance"; st.rerun()
 
+        # قسم الإدارة (يظهر للمشرف فقط)
         if st.session_state.role == "admin":
+            
+            # الفاصل المخصص لكلمة "إدارة"
             st.markdown("""
-            <div style='display:flex;align-items:center;text-align:center;margin:25px 0 15px 0;'>
-                <div style='flex:1;border-bottom:1px solid #c5cae9;'></div>
-                <span style='padding:0 15px;color:#7986cb;font-size:0.95rem;font-weight:bold;'>إدارة</span>
-                <div style='flex:1;border-bottom:1px solid #c5cae9;'></div>
+            <div style='display: flex; align-items: center; text-align: center; margin: 25px 0 15px 0;'>
+                <div style='flex: 1; border-bottom: 1px solid #c5cae9;'></div>
+                <span style='padding: 0 15px; color: #7986cb; font-size: 0.95rem; font-weight: bold;'>إدارة</span>
+                <div style='flex: 1; border-bottom: 1px solid #c5cae9;'></div>
             </div>
             """, unsafe_allow_html=True)
 
-            if st.button("🏫 إدارة الصفوف",      use_container_width=True): st.session_state.page = "classes";  st.rerun()
-            if st.button("👨‍🎓 إدارة الطلاب",     use_container_width=True): st.session_state.page = "students"; st.rerun()
-            if st.button("📊 الأرشيف والتقارير", use_container_width=True): st.session_state.page = "reports";  st.rerun()
-            if st.button("🔑 إدارة المستخدمين",  use_container_width=True): st.session_state.page = "users";    st.rerun()
+            # أزرار المشرف
+            if st.button("🏫 إدارة الصفوف", use_container_width=True): st.session_state.page = "classes"; st.rerun()
+            if st.button("👨‍🎓 إدارة الطلاب", use_container_width=True): st.session_state.page = "students"; st.rerun()
+            if st.button("📊 الأرشيف والتقارير", use_container_width=True): st.session_state.page = "reports"; st.rerun()
+            if st.button("🔑 إدارة المستخدمين", use_container_width=True): st.session_state.page = "users"; st.rerun()
 
         st.markdown("<br><br>", unsafe_allow_html=True)
-
+        
+        # زر الخروج (بلون أحمر فاتح لتمييزه)
         st.markdown("""
         <style>
             .logout-btn button { background-color: #fff0f0 !important; border-color: #ffcdd2 !important; color: #c62828 !important; }
             .logout-btn button:hover { background-color: #ffebee !important; border-color: #e53935 !important; }
         </style>
         """, unsafe_allow_html=True)
-
+        
         st.markdown('<div class="logout-btn">', unsafe_allow_html=True)
         if st.button("🚪 تسجيل الخروج", use_container_width=True):
             for k in ["logged_in", "user", "role", "page"]:
