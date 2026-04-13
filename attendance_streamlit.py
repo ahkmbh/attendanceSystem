@@ -46,7 +46,23 @@ st.set_page_config(
 )
 
 # ── CSS مخصص للدعم العربي والألوان وتحسينات الهاتف ──────────────────
+st.markdown(
+    """
+    <style>
+    /* 1. إخفاء الشريط الجانبي تماماً عند التصغير لمنع ظهور الخط الأزرق */
+    section[data-testid="stSidebar"][aria-expanded="false"] {
+        display: none;
+    }
 
+    /* 2. إلغاء أي هوامش إضافية تترك خطوطاً أو مساحات */
+    [data-testid="stSidebarNav"] {
+        display: none;
+        [data-testid="stSidebarNav"] {display: none;}
+        [data-testid="collapsedControl"] {display: none;}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 st.markdown("""
     <style>
@@ -1104,42 +1120,38 @@ def page_students():
     # ══════════════════════════════════════════════════════════
     with st.popover("➕ إضافة طالب جديد", use_container_width=True):
         st.subheader("📝 تسجيل بيانات الطالب")
- 
         col_img, col_main = st.columns([1, 2.5])
- 
         with col_img:
-            st.markdown("**الصورة الشخصية**")
-            photo_in = st.file_uploader(
-                "اختر صورة",
-                type=["jpg", "jpeg", "png"],
-                label_visibility="collapsed",
-                key="add_photo",
-            )
+            photo_in = None  # ← أضف هذا السطر أولاً
             if photo_in:
                 st.image(photo_in, use_container_width=True)
             else:
-                st.markdown(
-                    """
-                    <div style='width:100%;height:160px;border:2px dashed #1a237e;
-                                border-radius:14px;display:flex;flex-direction:column;
-                                align-items:center;justify-content:center;
-                                color:#1a237e;background:#f3f4fb;gap:6px;'>
-                        <span style='font-size:2.2rem;'>🖼️</span>
-                        <span style='font-size:.8rem;'>اسحب الصورة هنا</span>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                st.markdown("""
+                <div style='width:100%;height:220px;border:2px dashed #1a237e;
+                            border-radius:14px;display:flex;flex-direction:column;
+                            align-items:center;justify-content:center;
+                            color:#1a237e;background:#f3f4fb;gap:4px;'>
+                    <span style='font-size:2.2rem;'>🖼️</span>
+                    <span style='font-size:.8rem;'>الصورة الشخصية</span>
+                </div>
+                """, unsafe_allow_html=True)
+
+            photo_in = st.file_uploader(
+                "📎 اختر أو اسحب صورة",
+                type=["jpg", "jpeg", "png"],
+                label_visibility="visible",
+                key="add_photo",
+            )
  
         with col_main:
             p_in   = st.text_input("الرقم الشخصي *",   value=st.session_state.add_temp["pid"],  placeholder="مثال: 050123456")
             n_in   = st.text_input("الاسم الرباعي *",   value=st.session_state.add_temp["name"], placeholder="الاسم الكامل")
-            sch_in = st.text_input("المدرسة",            value=st.session_state.add_temp["sch"])
             cls_in = st.selectbox(
                 "الفرقة",
                 options=["غير محدد"] + class_names,
                 index=st.session_state.add_temp["cls_idx"],
             )
+            sch_in = st.text_input("المدرسة",            value=st.session_state.add_temp["sch"])
  
         with st.container(border=True):
             st.write("📞 التواصل والعنوان")
