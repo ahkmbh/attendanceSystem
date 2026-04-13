@@ -663,6 +663,130 @@ def page_login():
 # الشريط الجانبي (المطور)
 # ════════════════════════════════════════════════════════════════════
 def render_sidebar():
+
+    # ── شريط تنقل للموبايل (يظهر فقط على الشاشات الصغيرة) ──
+    role = st.session_state.role
+    page = st.session_state.get("page", "home")
+
+    admin_links = ""
+    if role == "admin":
+        admin_links = f"""
+        <a class="nav-item {'active' if page == 'classes' else ''}" onclick="nav('classes')">🏫<span>الصفوف</span></a>
+        <a class="nav-item {'active' if page == 'students' else ''}" onclick="nav('students')">👨‍🎓<span>الطلاب</span></a>
+        <a class="nav-item {'active' if page == 'reports' else ''}" onclick="nav('reports')">📊<span>التقارير</span></a>
+        <a class="nav-item {'active' if page == 'users' else ''}" onclick="nav('users')">🔑<span>المستخدمين</span></a>
+        """
+
+    st.markdown(f"""
+    <style>
+    @media (max-width: 768px) {{
+
+        /* إخفاء الـ sidebar على الموبايل */
+        div[data-testid="stSidebar"],
+        div[data-testid="collapsedControl"] {{
+            display: none !important;
+        }}
+
+        /* توسيع المحتوى ليملأ الشاشة */
+        .main .block-container {{
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            padding-bottom: 80px !important;
+            max-width: 100% !important;
+        }}
+
+        /* شريط التنقل السفلي */
+        .mobile-nav {{
+            display: flex !important;
+        }}
+    }}
+
+    @media (min-width: 769px) {{
+        .mobile-nav {{ display: none !important; }}
+    }}
+
+    .mobile-nav {{
+        display: none;
+        position: fixed;
+        bottom: 0;
+        right: 0;
+        left: 0;
+        z-index: 9999;
+        background: #1a237e;
+        border-top: 2px solid #283593;
+        height: 64px;
+        justify-content: space-around;
+        align-items: center;
+        padding: 0 4px;
+    }}
+
+    .nav-item {{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #9fa8da !important;
+        font-size: 10px;
+        gap: 2px;
+        padding: 6px 8px;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none !important;
+        min-width: 52px;
+    }}
+
+    .nav-item span {{
+        font-size: 10px;
+        color: inherit;
+    }}
+
+    .nav-item:first-child {{
+        font-size: 18px;
+    }}
+
+    .nav-item.active {{
+        color: #ffffff !important;
+        background: #283593;
+    }}
+
+    .nav-item:hover {{
+        color: #ffffff !important;
+        background: rgba(255,255,255,0.1);
+    }}
+    </style>
+
+    <div class="mobile-nav">
+        <a class="nav-item {'active' if page == 'home' else ''}" onclick="nav('home')">🏠<span>الرئيسية</span></a>
+        <a class="nav-item {'active' if page == 'attendance' else ''}" onclick="nav('attendance')">📝<span>الحضور</span></a>
+        {admin_links}
+        <a class="nav-item logout" onclick="nav('logout')" style="color:#ef9a9a !important;">🚪<span>خروج</span></a>
+    </div>
+
+    <script>
+    function nav(page) {{
+        // إرسال الصفحة المطلوبة عبر query params
+        const url = new URL(window.location.href);
+        url.searchParams.set('nav', page);
+        window.location.href = url.toString();
+    }}
+    </script>
+    """, unsafe_allow_html=True)
+
+    # معالجة التنقل من الموبايل
+    params = st.query_params
+    if "nav" in params:
+        nav_page = params["nav"]
+        st.query_params.clear()
+        if nav_page == "logout":
+            for k in ["logged_in", "user", "role", "page"]:
+                st.session_state.pop(k, None)
+        else:
+            st.session_state.page = nav_page
+        st.rerun()
+
+    # ── الـ sidebar العادي للديسكتوب ──────────────────────────
+
     with st.sidebar:
         # الصندوق العلوي الأول: عنوان النظام
         st.markdown("""
