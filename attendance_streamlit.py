@@ -1420,21 +1420,21 @@ def page_classes():
         return
  
     # ── عرض بطاقات الصفوف والتعديل/الحذف ──
+    # ── عرض بطاقات الصفوف (بدون أسهم الترتيب) ──
     for index, cls in enumerate(filtered):
         color = get_accent(cls["id"])
         s_count = students_map.get(cls["id"], 0)
-        
-        # حاوية البطاقة
+ 
+        # الحاوية الرئيسية للبطاقة
         with st.container(border=True):
-            # تقسيم الأعمدة مع التوسيط العمودي
-            # 💡 ملاحظة: إذا كنت تستخدم إصدار قديم من Streamlit وظهر خطأ، قم بحذف vertical_alignment="center"
-            col_info, col_up, col_down, col_edit, col_del = st.columns(
-                [4, 0.5, 0.5, 1.2, 1.2], 
+            # توزيع الأعمدة: عمود للمعلومات وعمودين للأزرار فقط
+            col_info, col_edit, col_del = st.columns(
+                [5, 1, 1], 
                 gap="small", 
                 vertical_alignment="center"
             )
-            
-            # معلومات الصف
+ 
+            # العمود الأول: معلومات الصف
             with col_info:
                 st.markdown(
                     f"""
@@ -1448,33 +1448,19 @@ def page_classes():
                     """,
                     unsafe_allow_html=True,
                 )
-            
-            # زر سهم أعلى
-            with col_up:
-                up_disabled = index == 0
-                if st.button("▲", key=f"up_{cls['id']}", help="رفع للأعلى", disabled=up_disabled, use_container_width=True):
-                    prev = filtered[index - 1]
-                    swap_positions(cls["id"], cls["position"], prev["id"], prev["position"])
-                    st.rerun()
-            
-            # زر سهم أسفل
-            with col_down:
-                down_disabled = index == len(filtered) - 1
-                if st.button("▼", key=f"down_{cls['id']}", help="تنزيل للأسفل", disabled=down_disabled, use_container_width=True):
-                    nxt = filtered[index + 1]
-                    swap_positions(cls["id"], cls["position"], nxt["id"], nxt["position"])
-                    st.rerun()
-            
-            # زر تعديل
+ 
+            # العمود الثاني: زر التعديل
             with col_edit:
                 if st.button("✏️ تعديل", key=f"edit_{cls['id']}", use_container_width=True):
                     other_names = [c["name"] for c in classes_list if c["id"] != cls["id"]]
                     dialog_edit_class(cls, other_names)
-            
-            # زر حذف
+ 
+            # العمود الثالث: زر الحذف
             with col_del:
                 if st.button("🗑️ حذف", key=f"del_{cls['id']}", use_container_width=True):
                     dialog_delete_class(cls, s_count)
+           
+     
 # ════════════════════════════════════════════════════════════════════
 # إدارة الطلاب
 # ════════════════════════════════════════════════════════════════════
